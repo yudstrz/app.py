@@ -27,22 +27,22 @@ QUESTIONS_LIST = [
 ]
 
 # =====================================================================
-# CREATE FOLDER IF NOT EXIST
+# FOLDER INITIALIZATION
 # =====================================================================
-os.makedirs(RECORDINGS_FOLDER, exist_ok=True)
+if not os.path.exists(RECORDINGS_FOLDER):
+    os.makedirs(RECORDINGS_FOLDER)
 
 # =====================================================================
-# CREATE EXCEL FILE IF NOT EXIST
+# EXCEL INITIALIZATION
 # =====================================================================
 if not os.path.exists(EXCEL_FILE):
     workbook = openpyxl.Workbook()
     sheet = workbook.active
     sheet.append(EXCEL_HEADER)
     workbook.save(EXCEL_FILE)
-
-# Load workbook
-workbook = openpyxl.load_workbook(EXCEL_FILE)
-sheet = workbook.active
+else:
+    workbook = openpyxl.load_workbook(EXCEL_FILE)
+    sheet = workbook.active
 
 # =====================================================================
 # SESSION STATE
@@ -73,7 +73,6 @@ with st.form("participant_form"):
     submitted = st.form_submit_button("✅ Proceed to Recording Session")
 
 if submitted:
-    # Append data ke Excel
     sheet.append([name, gender, program, city, age, residence, campus, test_type, test_score, perception])
     workbook.save(EXCEL_FILE)
     st.success(f"Data for {name} saved successfully!")
@@ -117,10 +116,13 @@ if st.session_state.participant_name:
             with open(save_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             
-            st.session_state.audio_uploaded[q_name] = save_path
+            st.session_state.audio_uploaded[q_name] = save_path  # simpan path tiap soal
             
-            st.success(f"✅ Audio for {q_name} saved!")
-            st.audio(save_path)
+            if os.path.exists(save_path):
+                st.success(f"✅ Audio for {q_name} saved!")
+                st.audio(save_path)
+            else:
+                st.error("❌ Audio failed to save!")
         
         # Tombol Next
         if st.button("➡️ Next Question", key=f"next_{q_index}"):
