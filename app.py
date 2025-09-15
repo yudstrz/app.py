@@ -114,28 +114,42 @@ if st.session_state.participant_name:
             file_name = f"{safe_name}_{q_name}_{timestamp}_{filename}"
             
             try:
-                # Convert uploaded file ke bytes yang proper
+                # Convert uploaded file ke bytes
                 file_bytes = uploaded_file.read()
-                
-                # Reset file pointer untuk bisa dibaca lagi kalau perlu
                 uploaded_file.seek(0)
                 
-                # Upload ke Supabase Storage bucket "audio"
-                response = supabase.storage.from_("audio").upload(file_name, file_bytes)
+                # Upload ke Supabase Storage
+                supabase.storage.from_("audio").upload(file_name, file_bytes)
                 
-                if hasattr(response, 'error') and response.error:
-                    st.error(f"Upload failed: {response.error}")
-                else:
-                    # ambil URL public untuk playback
-                    audio_url = supabase.storage.from_("audio").get_public_url(file_name)
-                    st.session_state.audio_uploaded[q_name] = audio_url
-                    
-                    st.success(f"✅ Audio for {q_name} saved to Supabase Storage!")
-                    st.audio(uploaded_file)  # Play dari uploaded_file langsung
-                    
+                # Get public URL
+                audio_url = supabase.storage.from_("audio").get_public_url(file_name)
+                st.session_state.audio_uploaded[q_name] = audio_url
+                
+                st.success(f"✅ Audio for {q_name} saved to Supabase Storage!")
+                st.audio(uploaded_file)
+                
             except Exception as e:
-                st.error(f"Failed to upload audio: {str(e)}")
-                st.info("💡 Try using a different audio format (WAV or MP3 recommended)")
+                st.error(f"Upload failed: {str(e)}")
+                
+                # Show specific error dan solusi
+                error_msg = str(e).lower()
+                if "403" in error_msg or "unauthorized" in error_msg or "rls" in error_msg:
+                    st.error("🔒 **Storage Permission Issue**")
+                    st.markdown("""
+                    **Fix di Supabase Dashboard:**
+                    1. Go to **Storage** → **Buckets**
+                    2. Click bucket **"audio"** (create if missing)
+                    3. Set as **Public bucket** ✅
+                    4. Or add **RLS Policy**: Allow INSERT/SELECT for authenticated users
+                    
+                    **Quick RLS Policy:**
+                    ```sql
+                    INSERT: (auth.role() = 'anon')
+                    SELECT: (auth.role() = 'anon')
+                    ```
+                    """)
+                else:
+                    st.info("💡 Try different audio format or check file size")
         
         if st.button("➡️ Next Question", key=f"next_{q_index}"):
             st.session_state.current_question_index += 1
