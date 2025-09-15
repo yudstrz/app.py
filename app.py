@@ -45,10 +45,10 @@ st.title("Participant Data Form")
 with st.form("participant_form"):
     name = st.text_input("Name")
     gender = st.selectbox("Gender", ["Male", "Female"])
-    program = st.text_input("Program Study")
+    program_study = st.text_input("Program Study")
     city = st.text_input("City")
     age = st.number_input("Age", min_value=0, max_value=120, step=1)
-    residence = st.text_input("Current Residence")
+    current_residence = st.text_input("Current Residence")
     campus = st.text_input("Campus")
     test_type = st.selectbox("Test Type", ["TOEFL", "IELTS", "Duolingo", "Other", "Never Taken"])
     test_score = st.number_input("Test Score", value=0, disabled=(test_type=="Never Taken"))
@@ -60,19 +60,21 @@ if submitted:
     data = {
         "name": name,
         "gender": gender,
-        "program_study": program,
+        "program_study": program_study,
         "city": city,
         "age": age,
-        "current_residence": residence,
+        "current_residence": current_residence,
         "campus": campus,
         "test_type": test_type,
         "test_score": test_score,
         "perception": perception
     }
-    supabase.table("participants").insert(data).execute()
-    
-    st.success(f"Data for {name} saved successfully to Supabase!")
-    st.session_state.participant_name = name
+    try:
+        supabase.table("participants").insert(data).execute()
+        st.success(f"Data for {name} saved successfully to Supabase!")
+        st.session_state.participant_name = name
+    except Exception as e:
+        st.error(f"Failed to insert data: {e}")
 
 # =====================================================================
 # RECORDING SESSION
