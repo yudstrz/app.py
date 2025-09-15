@@ -1,17 +1,18 @@
 import streamlit as st
-import openpyxl
 import os
+import re
+from supabase import create_client, Client
+
+# =====================================================================
+# SUPABASE CONFIG
+# =====================================================================
+SUPABASE_URL = "https://gmsizfioshudejqqapwr.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdtc2l6Zmlvc2h1ZGVqcXFhcHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTY4NjMsImV4cCI6MjA3MzQ5Mjg2M30.VaXNBtnxUmu__-_sKMuEZvJmJPoWk-pf_MD1gVoNlH4"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # =====================================================================
 # CONFIGURATION
 # =====================================================================
-EXCEL_FILE = "participant_data.xlsx"
-EXCEL_HEADER = ["Name", "Gender", "Program study", "City", "Age", 
-                "Current Residence", "Campus", "Test Type", 
-                "Test Score", "Perception"]
-
-RECORDINGS_FOLDER = "i_speak_recordings"
-
 QUESTIONS_LIST = [
     ("RASE", "Read this text and pronounce it clearly", 
      "The rapid advancement of technology has transformed the way we communicate with each other."),
@@ -25,24 +26,6 @@ QUESTIONS_LIST = [
     ("FSST","From this statement, try to express your opinion", 
      "Talk about the university course you enjoyed the most, describe one course you found difficult, and explain whether universities should focus more on practical skills or theoretical knowledge.")
 ]
-
-# =====================================================================
-# FOLDER INITIALIZATION
-# =====================================================================
-if not os.path.exists(RECORDINGS_FOLDER):
-    os.makedirs(RECORDINGS_FOLDER)
-
-# =====================================================================
-# EXCEL INITIALIZATION
-# =====================================================================
-if not os.path.exists(EXCEL_FILE):
-    workbook = openpyxl.Workbook()
-    sheet = workbook.active
-    sheet.append(EXCEL_HEADER)
-    workbook.save(EXCEL_FILE)
-else:
-    workbook = openpyxl.load_workbook(EXCEL_FILE)
-    sheet = workbook.active
 
 # =====================================================================
 # SESSION STATE
@@ -73,9 +56,22 @@ with st.form("participant_form"):
     submitted = st.form_submit_button("✅ Proceed to Recording Session")
 
 if submitted:
-    sheet.append([name, gender, program, city, age, residence, campus, test_type, test_score, perception])
-    workbook.save(EXCEL_FILE)
-    st.success(f"Data for {name} saved successfully!")
+    # simpan data ke Supabase
+    data = {
+        "name": name,
+        "gender": gender,
+        "program_study": program,
+        "city": city,
+        "age": age,
+        "current_residence": residence,
+        "campus": campus,
+        "test_type": test_type,
+        "test_score": test_score,
+        "perception": perception
+    }
+    supabase.table("participants").insert(data).execute()
+    
+    st.success(f"Data for {name} saved successfully to Supabase!")
     st.session_state.participant_name = name
 
 # =====================================================================
@@ -101,7 +97,6 @@ if st.session_state.participant_name:
         
         st.info("💡 On mobile, tap 'Upload' and select 'Record audio' to use your device's recorder.")
         
-        # Upload audio
         uploaded_file = st.file_uploader(
             f"Upload or record your audio for {q_name}", 
             type=["wav", "mp3", "m4a", "aac", "ogg", "amr"],
@@ -109,27 +104,27 @@ if st.session_state.participant_name:
         )
         
         if uploaded_file is not None:
-            save_path = os.path.join(
-                RECORDINGS_FOLDER, 
-                f"{st.session_state.participant_name}_{q_name}_{uploaded_file.name}"
-            )
-            with open(save_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
+            # nama file aman
+            safe_name = re.sub(r"[^\w\-_.]", "_", st.session_state.participant_name)
+            filename = re.sub(r"[^\w\-_.]", "_", uploaded_file.name)
+            file_name = f"{safe_name}_{q_name}_{filename}"
             
-            st.session_state.audio_uploaded[q_name] = save_path  # simpan path tiap soal
+            # upload ke Supabase Storage bucket "audio"
+            supabase.storage().from_("audio").upload(file_name, uploaded_file.getbuffer())
             
-            if os.path.exists(save_path):
-                st.success(f"✅ Audio for {q_name} saved!")
-                st.audio(save_path)
-            else:
-                st.error("❌ Audio failed to save!")
+            # ambil URL public untuk playback
+            audio_url = supabase.storage().from_("audio").get_public_url(file_name)
+            st.session_state.audio_uploaded[q_name] = audio_url
+            
+            st.success(f"✅ Audio for {q_name} saved to Supabase Storage!")
+            st.audio(audio_url)
         
-        # Tombol Next
         if st.button("➡️ Next Question", key=f"next_{q_index}"):
             st.session_state.current_question_index += 1
 
     else:
         st.success("🎉 All questions recorded. Session completed!")
         st.write("Uploaded files:")
-        for q_name, path in st.session_state.audio_uploaded.items():
-            st.write(f"- {q_name}: {path}")
+        for q_name, url in st.session_state.audio_uploaded.items():
+            st.write(f"- {q_name}: {url}")
+            st.audio(url)
