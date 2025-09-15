@@ -57,41 +57,31 @@ with st.form("participant_form"):
     submitted = st.form_submit_button("✅ Proceed to Recording Session")
 
 if submitted:
-    # Validasi input
-    if not name.strip():
-        st.error("Please enter your name!")
-    else:
-        # Simpan data ke Supabase
-        data = {
-            "name": name.strip(),
-            "gender": gender,
-            "program_study": program_study,
-            "city": city,
-            "age": age,
-            "current_residence": current_residence,
-            "campus": campus,
-            "test_type": test_type,
-            "test_score": test_score if test_type != "Never Taken" else 0,
-            "perception": perception
-        }
-        try:
-            result = supabase.table("participants").insert(data).execute()
-            if result.data:
-                st.success(f"Data for {name} saved successfully to Supabase!")
-                st.session_state.participant_name = name.strip()
-                st.rerun()  # Refresh untuk show recording session
-            else:
-                st.error("Failed to save data. Please try again.")
-        except Exception as e:
-            st.error(f"Failed to insert data: {str(e)}")
-            st.info("Please check your internet connection and try again.")
+    # simpan data ke Supabase
+    data = {
+        "name": name,
+        "gender": gender,
+        "program_study": program_study,
+        "city": city,
+        "age": age,
+        "current_residence": current_residence,
+        "campus": campus,
+        "test_type": test_type,
+        "test_score": test_score,
+        "perception": perception
+    }
+    try:
+        supabase.table("participants").insert(data).execute()
+        st.success(f"Data for {name} saved successfully to Supabase!")
+        st.session_state.participant_name = name
+    except Exception as e:
+        st.error(f"Failed to insert data: {e}")
 
 # =====================================================================
 # RECORDING SESSION
 # =====================================================================
 if st.session_state.participant_name:
     st.header("Voice Recording Session")
-    st.write(f"**Participant:** {st.session_state.participant_name}")
     
     q_index = st.session_state.current_question_index
     
@@ -101,28 +91,23 @@ if st.session_state.participant_name:
         q_instruction = q[1]
         q_text = q[2] if len(q) > 2 else ""
         
-        st.subheader(f"Question {q_index+1} of {len(QUESTIONS_LIST)}: {q_name}")
+        st.subheader(f"Question {q_index+1}: {q_name}")
         st.markdown(f"**Instruction:** {q_instruction}")
         if q_text:
             st.markdown(f"**Text:** {q_text}")
         if q_name == "DP":
-            # Cek apakah file gambar ada
-            image_path = "image/describe.jpg"
-            if os.path.exists(image_path):
-                st.image(image_path, use_column_width=True)
-            else:
-                st.warning("⚠️ Image file not found. Please make sure 'image/describe.jpg' exists.")
+            st.image("image/describe.jpg", use_column_width=True)
         
         st.info("💡 On mobile, tap 'Upload' and select 'Record audio' to use your device's recorder.")
         
         uploaded_file = st.file_uploader(
             f"Upload or record your audio for {q_name}", 
-            type=["wav", "mp3", "m4a", "aac", "ogg", "amr", "webm"],
+            type=["wav", "mp3", "m4a", "aac", "ogg", "amr"],
             key=f"uploader_{q_index}"
         )
         
         if uploaded_file is not None:
-            # Nama file aman dengan timestamp untuk avoid duplicates
+            # nama file aman dengan timestamp untuk avoid duplicates
             safe_name = re.sub(r"[^\w\-_.]", "_", st.session_state.participant_name)
             filename = re.sub(r"[^\w\-_.]", "_", uploaded_file.name)
             timestamp = int(time.time())
@@ -136,55 +121,29 @@ if st.session_state.participant_name:
                 uploaded_file.seek(0)
                 
                 # Upload ke Supabase Storage bucket "audio"
-                with st.spinner("Uploading audio..."):
-                    response = supabase.storage().from_("audio").upload(file_name, file_bytes)
+                response = supabase.storage.from_("audio").upload(file_name, file_bytes)
                 
-                # Check if upload successful
                 if hasattr(response, 'error') and response.error:
                     st.error(f"Upload failed: {response.error}")
                 else:
-                    # Ambil URL public untuk playback
-                    audio_url = supabase.storage().from_("audio").get_public_url(file_name)
+                    # ambil URL public untuk playback
+                    audio_url = supabase.storage.from_("audio").get_public_url(file_name)
                     st.session_state.audio_uploaded[q_name] = audio_url
                     
                     st.success(f"✅ Audio for {q_name} saved to Supabase Storage!")
                     st.audio(uploaded_file)  # Play dari uploaded_file langsung
                     
-                    # Show next button after successful upload
-                    if st.button("➡️ Next Question", key=f"next_{q_index}"):
-                        st.session_state.current_question_index += 1
-                        st.rerun()
-                        
             except Exception as e:
                 st.error(f"Failed to upload audio: {str(e)}")
                 st.info("💡 Try using a different audio format (WAV or MP3 recommended)")
         
-        # Progress bar
-        progress = (q_index + 1) / len(QUESTIONS_LIST)
-        st.progress(progress)
-        st.write(f"Progress: {q_index + 1}/{len(QUESTIONS_LIST)} questions")
+        if st.button("➡️ Next Question", key=f"next_{q_index}"):
+            st.session_state.current_question_index += 1
+            st.rerun()  # Force rerun untuk update UI
 
     else:
         st.success("🎉 All questions recorded. Session completed!")
-        st.balloons()
-        
-        if st.session_state.audio_uploaded:
-            st.write("**Uploaded files:**")
-            for q_name, url in st.session_state.audio_uploaded.items():
-                with st.expander(f"🎵 {q_name} Audio"):
-                    st.write(f"File URL: {url}")
-                    st.audio(url)
-        
-        # Reset button untuk participant baru
-        if st.button("🔄 Start New Session"):
-            # Reset semua session state
-            st.session_state.current_question_index = 0
-            st.session_state.participant_name = ""
-            st.session_state.audio_uploaded = {}
-            st.rerun()
-
-# =====================================================================
-# FOOTER
-# =====================================================================
-st.markdown("---")
-st.markdown("*Voice Recording App - Powered by Streamlit & Supabase*")
+        st.write("Uploaded files:")
+        for q_name, url in st.session_state.audio_uploaded.items():
+            st.write(f"- {q_name}: {url}")
+            st.audio(url)
