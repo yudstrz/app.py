@@ -9,7 +9,16 @@ from supabase import create_client, Client
 # =====================================================================
 SUPABASE_URL = "https://gmsizfioshudejqqapwr.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdtc2l6Zmlvc2h1ZGVqcXFhcHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTY4NjMsImV4cCI6MjA3MzQ5Mjg2M30.VaXNBtnxUmu__-_sKMuEZvJmJPoWk-pf_MD1gVoNlH4"
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Create client with bypass RLS option
+supabase: Client = create_client(
+    SUPABASE_URL, 
+    SUPABASE_KEY,
+    options={
+        "auto_refresh_token": False,
+        "persist_session": False
+    }
+)
 
 # =====================================================================
 # CONFIGURATION
