@@ -37,51 +37,101 @@ if 'participant_name' not in st.session_state:
     st.session_state.participant_name = ""
 if 'audio_uploaded' not in st.session_state:
     st.session_state.audio_uploaded = {}
+if 'form_submitted' not in st.session_state:
+    st.session_state.form_submitted = False
 
 # =====================================================================
 # PARTICIPANT FORM
 # =====================================================================
 st.title("Participant Data Form")
 
-with st.form("participant_form"):
-    name = st.text_input("Name")
-    gender = st.selectbox("Gender", ["Male", "Female"])
-    program_study = st.text_input("Program Study")
-    city = st.text_input("City")
-    age = st.number_input("Age", min_value=0, max_value=120, step=1)
-    current_residence = st.text_input("Current Residence")
-    campus = st.text_input("Campus")
-    test_type = st.selectbox("Test Type", ["TOEFL", "IELTS", "Duolingo", "Other", "Never Taken"])
-    test_score = st.number_input("Test Score", value=0, disabled=(test_type=="Never Taken"))
-    perception = st.selectbox("Perception", ["Basic", "Intermediate", "Advanced"])
-    submitted = st.form_submit_button("✅ Proceed to Recording Session")
+# Tampilkan form hanya jika belum submit
+if not st.session_state.form_submitted:
+    with st.form("participant_form"):
+        name = st.text_input("Name *", placeholder="Enter your full name")
+        gender = st.selectbox("Gender *", ["", "Male", "Female"])
+        program_study = st.text_input("Program Study *", placeholder="e.g., Computer Science")
+        city = st.text_input("City *", placeholder="Your city of origin")
+        age = st.number_input("Age *", min_value=1, max_value=120, step=1, value=None)
+        current_residence = st.text_input("Current Residence *", placeholder="Where you live now")
+        campus = st.text_input("Campus *", placeholder="Your campus name")
+        test_type = st.selectbox("Test Type *", ["", "TOEFL", "IELTS", "Duolingo", "Other", "Never Taken"])
+        
+        # Disable score input jika "Never Taken"
+        score_disabled = (test_type == "Never Taken")
+        test_score = st.number_input(
+            "Test Score *", 
+            value=0 if score_disabled else None,
+            disabled=score_disabled,
+            help="Leave as 0 if Never Taken"
+        )
+        
+        perception = st.selectbox("Perception *", ["", "Basic", "Intermediate", "Advanced"])
+        
+        st.markdown("_* Required fields_")
+        submitted = st.form_submit_button("✅ Proceed to Recording Session")
 
-if submitted:
-    # simpan data ke Supabase
-    data = {
-        "name": name,
-        "gender": gender,
-        "program_study": program_study,
-        "city": city,
-        "age": age,
-        "current_residence": current_residence,
-        "campus": campus,
-        "test_type": test_type,
-        "test_score": test_score,
-        "perception": perception
-    }
-    try:
-        supabase.table("participants").insert(data).execute()
-        st.success(f"Data for {name} saved successfully to Supabase!")
-        st.session_state.participant_name = name
-    except Exception as e:
-        st.error(f"Failed to insert data: {e}")
+    if submitted:
+        # Validasi semua field harus diisi
+        errors = []
+        
+        if not name or name.strip() == "":
+            errors.append("Name is required")
+        if not gender or gender == "":
+            errors.append("Gender is required")
+        if not program_study or program_study.strip() == "":
+            errors.append("Program Study is required")
+        if not city or city.strip() == "":
+            errors.append("City is required")
+        if age is None or age == 0:
+            errors.append("Age is required")
+        if not current_residence or current_residence.strip() == "":
+            errors.append("Current Residence is required")
+        if not campus or campus.strip() == "":
+            errors.append("Campus is required")
+        if not test_type or test_type == "":
+            errors.append("Test Type is required")
+        if test_type != "Never Taken" and (test_score is None or test_score == 0):
+            errors.append("Test Score is required (or select 'Never Taken')")
+        if not perception or perception == "":
+            errors.append("Perception is required")
+        
+        # Jika ada error, tampilkan pesan
+        if errors:
+            st.error("❌ Please complete all required fields:")
+            for error in errors:
+                st.warning(f"• {error}")
+        else:
+            # Simpan data ke Supabase
+            data = {
+                "name": name.strip(),
+                "gender": gender,
+                "program_study": program_study.strip(),
+                "city": city.strip(),
+                "age": age,
+                "current_residence": current_residence.strip(),
+                "campus": campus.strip(),
+                "test_type": test_type,
+                "test_score": test_score if test_type != "Never Taken" else 0,
+                "perception": perception
+            }
+            try:
+                supabase.table("participants").insert(data).execute()
+                st.success(f"✅ Data for {name} saved successfully to Supabase!")
+                st.session_state.participant_name = name.strip()
+                st.session_state.form_submitted = True
+                time.sleep(1)  # Brief pause sebelum rerun
+                st.rerun()  # Refresh untuk hide form
+            except Exception as e:
+                st.error(f"❌ Failed to insert data: {e}")
 
 # =====================================================================
 # RECORDING SESSION
 # =====================================================================
-if st.session_state.participant_name:
-    st.header("Voice Recording Session")
+if st.session_state.form_submitted and st.session_state.participant_name:
+    st.success(f"👤 Participant: **{st.session_state.participant_name}**")
+    st.divider()
+    st.header("🎙️ Voice Recording Session")
     
     q_index = st.session_state.current_question_index
     
@@ -91,7 +141,7 @@ if st.session_state.participant_name:
         q_instruction = q[1]
         q_text = q[2] if len(q) > 2 else ""
         
-        st.subheader(f"Question {q_index+1}: {q_name}")
+        st.subheader(f"Question {q_index+1} of {len(QUESTIONS_LIST)}: {q_name}")
         st.markdown(f"**Instruction:** {q_instruction}")
         if q_text:
             st.markdown(f"**Text:** {q_text}")
@@ -157,7 +207,7 @@ if st.session_state.participant_name:
 
     else:
         st.success("🎉 All questions recorded. Session completed!")
-        st.write("Uploaded files:")
+        st.write("**Uploaded files:**")
         for q_name, url in st.session_state.audio_uploaded.items():
-            st.write(f"- {q_name}: {url}")
+            st.write(f"- **{q_name}**: {url}")
             st.audio(url)
