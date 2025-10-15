@@ -108,11 +108,11 @@ if not st.session_state.form_submitted:
                 "gender": gender,
                 "program_study": program_study.strip(),
                 "city": city.strip(),
-                "age": age,
+                "age": int(age),  # Konversi ke integer
                 "current_residence": current_residence.strip(),
                 "campus": campus.strip(),
                 "test_type": test_type,
-                "test_score": test_score if test_type != "Never Taken" else 0,
+                "test_score": int(test_score) if test_type != "Never Taken" else 0,  # Konversi ke integer
                 "perception": perception
             }
             try:
