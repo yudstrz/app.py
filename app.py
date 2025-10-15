@@ -146,7 +146,7 @@ if st.session_state.form_submitted and st.session_state.participant_name:
         if q_text:
             st.markdown(f"**Text:** {q_text}")
         if q_name == "DP":
-            st.image("image/describe.jpg", use_column_width=True)
+            st.image("image/describe.jpg", use_container_width=True)
         
         st.info("💡 On mobile, tap 'Upload' and select 'Record audio' to use your device's recorder.")
         
